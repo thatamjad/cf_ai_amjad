@@ -1,0 +1,229 @@
+# =============================================================================
+# AI Agent Application - Cloudflare Workers Configuration
+# =============================================================================
+# This configuration supports multiple environments:
+# - Development (default)
+# - Staging (env.staging)
+# - Production (env.production)
+# =============================================================================
+
+name = "ai-agent-app"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+node_compat = true
+
+# =============================================================================
+# CLOUDFLARE SERVICE BINDINGS
+# =============================================================================
+
+# AI Binding for Workers AI (Llama 3.3, embeddings, image generation)
+[ai]
+binding = "AI"
+
+# Vectorize for semantic memory and embeddings storage
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "ai-agent-memory"
+
+# R2 for file storage (images, documents, exports)
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "ai-agent-files"
+
+# KV for configuration, caching, and metadata
+[[kv_namespaces]]
+binding = "CONFIG"
+id = "" # Fill with: wrangler kv:namespace create "CONFIG"
+preview_id = "" # Fill with: wrangler kv:namespace create "CONFIG" --preview
+
+# Additional KV for rate limiting
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "" # Fill with: wrangler kv:namespace create "RATE_LIMIT"
+preview_id = "" # Fill with: wrangler kv:namespace create "RATE_LIMIT" --preview
+
+# Additional KV for sessions and authentication
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "" # Fill with: wrangler kv:namespace create "SESSIONS"
+preview_id = "" # Fill with: wrangler kv:namespace create "SESSIONS" --preview
+
+# Durable Objects binding for AI Agent state
+[[durable_objects.bindings]]
+name = "AI_AGENT"
+class_name = "AIAgent"
+script_name = "ai-agent-app"
+
+# =============================================================================
+# DURABLE OBJECTS MIGRATIONS
+# =============================================================================
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AIAgent"]
+
+# =============================================================================
+# OBSERVABILITY & MONITORING
+# =============================================================================
+
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# =============================================================================
+# DEFAULT ENVIRONMENT VARIABLES (Development)
+# =============================================================================
+
+[vars]
+ENVIRONMENT = "development"
+LOG_LEVEL = "debug"
+MAX_CONVERSATION_HISTORY = "50"
+MAX_TOKENS_PER_REQUEST = "4096"
+ENABLE_ANALYTICS = "true"
+ENABLE_TOOL_EXECUTION = "true"
+CORS_ALLOWED_ORIGINS = "*"
+RATE_LIMIT_REQUESTS_PER_MINUTE = "60"
+
+# =============================================================================
+# RESOURCE LIMITS
+# =============================================================================
+
+[limits]
+cpu_ms = 30000
+
+# =============================================================================
+# STAGING ENVIRONMENT
+# =============================================================================
+
+[env.staging]
+name = "ai-agent-app-staging"
+workers_dev = false
+
+# Custom domain routes for staging
+# Example: routes = [{ pattern = "staging-api.yourdomain.com/*", zone_name = "yourdomain.com" }]
+routes = [
+  { pattern = "staging.ai-agent-app.workers.dev/*", custom_domain = true }
+]
+
+# Staging-specific Vectorize
+[[env.staging.vectorize]]
+binding = "VECTORIZE"
+index_name = "ai-agent-memory-staging"
+
+# Staging-specific R2
+[[env.staging.r2_buckets]]
+binding = "FILES"
+bucket_name = "ai-agent-files-staging"
+
+# Staging-specific KV namespaces
+[[env.staging.kv_namespaces]]
+binding = "CONFIG"
+id = "" # Fill with staging CONFIG namespace ID
+
+[[env.staging.kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "" # Fill with staging RATE_LIMIT namespace ID
+
+[[env.staging.kv_namespaces]]
+binding = "SESSIONS"
+id = "" # Fill with staging SESSIONS namespace ID
+
+# Staging Durable Objects
+[[env.staging.durable_objects.bindings]]
+name = "AI_AGENT"
+class_name = "AIAgent"
+script_name = "ai-agent-app-staging"
+
+# Staging environment variables
+[env.staging.vars]
+ENVIRONMENT = "staging"
+LOG_LEVEL = "info"
+MAX_CONVERSATION_HISTORY = "50"
+MAX_TOKENS_PER_REQUEST = "4096"
+ENABLE_ANALYTICS = "true"
+ENABLE_TOOL_EXECUTION = "true"
+CORS_ALLOWED_ORIGINS = "https://staging.ai-agent-app.pages.dev,http://localhost:3000"
+RATE_LIMIT_REQUESTS_PER_MINUTE = "100"
+
+# Staging observability
+[env.staging.observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# =============================================================================
+# PRODUCTION ENVIRONMENT
+# =============================================================================
+
+[env.production]
+name = "ai-agent-app-prod"
+workers_dev = false
+
+# Custom domain routes for production
+# Example: routes = [{ pattern = "api.yourdomain.com/*", zone_name = "yourdomain.com" }]
+routes = [
+  { pattern = "api.ai-agent-app.workers.dev/*", custom_domain = true }
+]
+
+# Production-specific Vectorize
+[[env.production.vectorize]]
+binding = "VECTORIZE"
+index_name = "ai-agent-memory-production"
+
+# Production-specific R2
+[[env.production.r2_buckets]]
+binding = "FILES"
+bucket_name = "ai-agent-files-production"
+
+# Production-specific KV namespaces
+[[env.production.kv_namespaces]]
+binding = "CONFIG"
+id = "" # Fill with production CONFIG namespace ID
+
+[[env.production.kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "" # Fill with production RATE_LIMIT namespace ID
+
+[[env.production.kv_namespaces]]
+binding = "SESSIONS"
+id = "" # Fill with production SESSIONS namespace ID
+
+# Production Durable Objects
+[[env.production.durable_objects.bindings]]
+name = "AI_AGENT"
+class_name = "AIAgent"
+script_name = "ai-agent-app-prod"
+
+# Production environment variables
+[env.production.vars]
+ENVIRONMENT = "production"
+LOG_LEVEL = "warn"
+MAX_CONVERSATION_HISTORY = "100"
+MAX_TOKENS_PER_REQUEST = "8192"
+ENABLE_ANALYTICS = "true"
+ENABLE_TOOL_EXECUTION = "true"
+CORS_ALLOWED_ORIGINS = "https://ai-agent-app.pages.dev,https://yourdomain.com"
+RATE_LIMIT_REQUESTS_PER_MINUTE = "200"
+
+# Production observability with sampling
+[env.production.observability]
+enabled = true
+head_sampling_rate = 0.1  # Sample 10% of requests in production
+
+# Production resource limits (higher for production traffic)
+[env.production.limits]
+cpu_ms = 50000
+
+# =============================================================================
+# NOTES:
+# =============================================================================
+# 1. Replace placeholder IDs with actual resource IDs after creation
+# 2. Update custom domain routes with your actual domains
+# 3. Configure secrets using: wrangler secret put <SECRET_NAME> --env <environment>
+# 4. Required secrets for production:
+#    - JWT_SECRET
+#    - ENCRYPTION_KEY
+#    - OPENAI_API_KEY (fallback, optional)
+#    - ANTHROPIC_API_KEY (fallback, optional)
+# 5. Deploy to staging: wrangler deploy --env staging
+# 6. Deploy to production: wrangler deploy --env production
+# =============================================================================

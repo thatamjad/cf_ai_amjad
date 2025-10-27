@@ -1,0 +1,44 @@
+{
+  "name": "ai-agent-frontend",
+  "version": "1.0.0",
+  "description": "AI Agent Application Frontend - Built with Next.js and Cloudflare Pages",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "preview": "next build && wrangler pages dev .next",
+    "deploy": "npm run build && wrangler pages deploy .next"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "cloudflare",
+    "next.js"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/node": "^24.9.1",
+    "@types/react": "^19.2.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.548.0",
+    "next": "^16.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.3.1",
+    "typescript": "^5.9.3",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.16",
+    "@tailwindcss/typography": "^0.5.19",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.16"
+  }
+}

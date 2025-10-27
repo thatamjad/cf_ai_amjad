@@ -1,0 +1,385 @@
+# =============================================================================
+# GitHub Actions CI/CD Pipeline for AI Agent App
+# =============================================================================
+# This pipeline handles:
+# - Code quality checks (lint, format, type check)
+# - Testing (unit, integration, E2E)
+# - Security scanning
+# - Building
+# - Deployment to Staging and Production
+# - Performance testing
+# - Quality gates
+# =============================================================================
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  NODE_VERSION: '18.x'
+
+jobs:
+  # ==========================================================================
+  # Job 1: Lint and Type Check
+  # ==========================================================================
+  
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            ai-agent-app/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: ./ai-agent-app
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run ESLint (Backend)
+        working-directory: ./ai-agent-app
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Run ESLint (Frontend)
+        working-directory: ./frontend
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Check formatting (Backend)
+        working-directory: ./ai-agent-app
+        run: npm run format:check || echo "Format check not configured"
+        continue-on-error: true
+
+      - name: Type check (Backend)
+        working-directory: ./ai-agent-app
+        run: npm run type-check
+
+      - name: Type check (Frontend)
+        working-directory: ./frontend
+        run: npx tsc --noEmit
+
+  # ==========================================================================
+  # Job 2: Unit Tests
+  # ==========================================================================
+  
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: ai-agent-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./ai-agent-app
+        run: npm ci
+
+      - name: Run tests with coverage
+        working-directory: ./ai-agent-app
+        run: npm test -- --coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./ai-agent-app/coverage/coverage-final.json
+          flags: backend
+          token: ${{ secrets.CODECOV_TOKEN }}
+        continue-on-error: true
+
+      - name: Archive test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ai-agent-app/coverage/
+          retention-days: 30
+
+  # ==========================================================================
+  # Job 3: Security Audit
+  # ==========================================================================
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test -- --run
+
+      - name: Generate coverage report
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/coverage-final.json
+          flags: unittests
+          name: codecov-umbrella
+
+      - name: Archive coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage/
+
+  # Job 3: Security Audit
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Run dependency vulnerability scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+  # Job 4: Build
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: [test-unit, security-audit]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build backend
+        run: npm run build
+
+      - name: Archive build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts
+          path: dist/
+
+  # Job 5: Deploy to Staging (on develop branch)
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment:
+      name: staging
+      url: https://staging-ai-agent.pages.dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy Workers to Staging
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env staging
+
+      - name: Deploy Pages to Staging
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+          npx wrangler pages deploy dist --project-name=ai-agent-staging --branch=staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Run smoke tests
+        run: npm run test:smoke -- --env=staging
+
+      - name: Notify deployment status
+        uses: 8398a7/action-slack@v3
+        if: always()
+        with:
+          status: ${{ job.status }}
+          text: 'Staging deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  # Job 6: Deploy to Production (on main branch)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://ai-agent.pages.dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy Workers to Production
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env production
+
+      - name: Deploy Pages to Production
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+          npx wrangler pages deploy dist --project-name=ai-agent-app --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Run smoke tests
+        run: npm run test:smoke -- --env=production
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Notify deployment status
+        uses: 8398a7/action-slack@v3
+        if: always()
+        with:
+          status: ${{ job.status }}
+          text: 'Production deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  # Job 7: Performance Testing
+  performance-test:
+    name: Performance Testing
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/develop'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run load tests
+        run: k6 run tests/performance/load-test.js
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-results
+          path: performance-results.json
+
+# Quality Gates Configuration
+# Enforce minimum standards before merging
+quality-gate:
+  name: Quality Gate
+  runs-on: ubuntu-latest
+  needs: [test-unit, security-audit, build]
+  if: github.event_name == 'pull_request'
+  steps:
+    - name: Download coverage report
+      uses: actions/download-artifact@v3
+      with:
+        name: coverage-report
+
+    - name: Check coverage threshold
+      run: |
+        COVERAGE=$(jq '.total.lines.pct' coverage/coverage-summary.json)
+        echo "Coverage: $COVERAGE%"
+        if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+          echo "❌ Coverage below 80% threshold"
+          exit 1
+        fi
+        echo "✅ Coverage meets threshold"
+
+    - name: Quality gate passed
+      run: echo "✅ All quality gates passed"
