@@ -27,7 +27,7 @@ export class Logger {
       context: this.context,
       message,
     };
-    
+
     if (data) {
       logEntry.data = data;
     }
