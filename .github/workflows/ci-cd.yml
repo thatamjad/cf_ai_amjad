@@ -368,20 +368,20 @@ jobs:
     needs: [test-unit, security-audit, build]
     if: github.event_name == 'pull_request'
     steps:
-    - name: Download coverage report
-      uses: actions/download-artifact@v3
-      with:
-        name: coverage-report
+      - name: Download coverage report
+        uses: actions/download-artifact@v3
+        with:
+          name: coverage-report
 
-    - name: Check coverage threshold
-      run: |
-        COVERAGE=$(jq '.total.lines.pct' coverage/coverage-summary.json)
-        echo "Coverage: $COVERAGE%"
-        if (( $(echo "$COVERAGE < 80" | bc -l) )); then
-          echo "❌ Coverage below 80% threshold"
-          exit 1
-        fi
-        echo "✅ Coverage meets threshold"
+      - name: Check coverage threshold
+        run: |
+          COVERAGE=$(jq '.total.lines.pct' coverage/coverage-summary.json)
+          echo "Coverage: $COVERAGE%"
+          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+            echo "❌ Coverage below 80% threshold"
+            exit 1
+          fi
+          echo "✅ Coverage meets threshold"
 
-    - name: Quality gate passed
-      run: echo "✅ All quality gates passed"
+      - name: Quality gate passed
+        run: echo "✅ All quality gates passed"
