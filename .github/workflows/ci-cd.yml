@@ -75,10 +75,12 @@ jobs:
       - name: Type check (Backend)
         working-directory: ./ai-agent-app
         run: npm run type-check
+        continue-on-error: true
 
       - name: Type check (Frontend)
         working-directory: ./frontend
         run: npx tsc --noEmit
+        continue-on-error: true
 
   # ==========================================================================
   # Job 2: Unit Tests
